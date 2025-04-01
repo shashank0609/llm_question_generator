@@ -2,6 +2,7 @@ import fitz  # PyMuPDF
 import openai
 import os
 import random
+import pandas as pd  # For structured output
 from prompt import DOMAIN_CONTEXT, QUESTION_GENERATION_PROMPT
 
 
@@ -29,7 +30,9 @@ class PDFQuestionGenerator:
     def generate_questions(self, extracted_text, num_questions=5):
         """Generates questions using Azure OpenAI GPT models based on extracted text."""
         prompt = QUESTION_GENERATION_PROMPT.format(
-            extracted_text=extracted_text, num_questions=num_questions
+            domain_context=DOMAIN_CONTEXT,
+            extracted_text=extracted_text,
+            num_questions=num_questions,
         )
 
         response = self.client.completions.create(
@@ -44,9 +47,12 @@ class PDFQuestionGenerator:
         extracted_texts = self.extract_text_from_pdf(pdf_path)
         total_pages = len(extracted_texts)
 
+        if total_pages == 0:
+            print(f"⚠️ No text found in {pdf_path}. Skipping...")
+            return []
+
         # Select pages randomly but ensure even distribution
         selected_pages = random.sample(extracted_texts.keys(), min(5, total_pages))
-
         combined_text = " ".join([extracted_texts[p] for p in selected_pages])
         questions = self.generate_questions(combined_text, num_questions)
 
@@ -54,3 +60,11 @@ class PDFQuestionGenerator:
             {"Question": q, "Page Reference": p}
             for q, p in zip(questions, selected_pages)
         ]
+
+    def generate_questions_from_multiple_pdfs(self, pdf_paths, num_questions=5):
+        """Processes multiple PDFs and generates questions for each."""
+        results = {}
+        for pdf_path in pdf_paths:
+            questions = self.generate_questions_from_pdf(pdf_path, num_questions)
+            results[pdf_path] = questions
+        return results
